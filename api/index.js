@@ -37,7 +37,7 @@ export default async function handler(req, res) {
 
     /* ───── FETCH FROM SOURCE ───── */
     const upstream = await fetch(
-      `https://fam-official.serv00.net/api/database.php?${searchParam}=${encodeURIComponent(clean)}`,
+      `https://jbk-darkwork.deno.dev/?number=?${searchParam}=${encodeURIComponent(clean)}`,
       {
         headers: {
           "User-Agent": "MrSoomro-Cyber-Engine/2026",
