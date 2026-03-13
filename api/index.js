@@ -1,72 +1,38 @@
 export default async function handler(req, res) {
-  // CORS Headers
+  // CORS Headers taake har jagah chale
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
-  
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
 
   const { query } = req.query;
 
   if (!query) {
     return res.status(400).json({ 
       success: false, 
-      message: "Please provide Number or CNIC",
+      message: "Please enter a Number",
       developer: "MrSoomro" 
     });
   }
 
-  // Number se extra characters hatane ke liye
-  const clean = query.replace(/\D/g, "");
+  // Number se extra characters hatana
+  const cleanNumber = query.replace(/\D/g, "");
 
   try {
-    // Timeout set karna zaroori hai taake Vercel freeze na ho
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), 8000); // 8 seconds timeout
+    // Aapki di hui working API
+    const response = await fetch(`https://jbk-darkwork.deno.dev/?number=${cleanNumber}`);
+    const data = await response.json();
 
-    const upstream = await fetch(`https://jbk-darkwork.deno.dev/?number=${clean}`, {
-      signal: controller.signal,
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-      }
+    // Direct data display karna
+    return res.status(200).json({
+      success: true,
+      status: "success",
+      developer: "MrSoomro",
+      result: data // Ye direct aapki API ka result dikhayega
     });
-    
-    clearTimeout(id);
 
-    const data = await upstream.json();
-
-    // Data check logic
-    if (data && data.success === true && Array.isArray(data.data) && data.data.length > 0) {
-      
-      const results = data.data.map(r => ({
-        full_name: r.name || "N/A",
-        phone: r.number || clean,
-        cnic: r.cnic || "N/A",
-        address: r.address || "N/A"
-      }));
-
-      return res.status(200).json({
-        success: true,
-        status: "success",
-        developer: "MrSoomro",
-        query: clean,
-        count: results.length,
-        result: results
-      });
-    } else {
-      return res.status(404).json({
-        success: false,
-        status: "error",
-        message: "No record found for this query",
-        developer: "MrSoomro"
-      });
-    }
-  } catch (err) {
+  } catch (error) {
     return res.status(500).json({ 
-      success: false,
-      status: "error", 
-      message: "Database Node Busy or Offline",
+      success: false, 
+      message: "Database Server Connection Error",
       developer: "MrSoomro"
     });
   }
