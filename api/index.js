@@ -1,56 +1,72 @@
 export default async function handler(req, res) {
+
+  /* ───── CORS (Frontend Friendly) ───── */
   res.setHeader("Access-Control-Allow-Origin", "*");
-  const { query } = req.query;
+  res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "*");
 
-  if (!query) {
-    return res.status(400).json({ success: false, message: "Enter Number (e.g. 03xx) or CNIC" });
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
   }
 
-  // 1. Number se characters hatana
-  let clean = query.replace(/\D/g, "");
+  const { number } = req.query;
 
-  // 2. Agar number 92 se shuru ho raha hai toh usay 0 mein badalna
-  if (clean.startsWith("92") && clean.length > 10) {
-    clean = "0" + clean.slice(2);
-  } 
-  // Agar number 0 ke baghair hai (e.g. 310...) toh 0 lagana
-  else if (clean.startsWith("3") && clean.length === 10) {
-    clean = "0" + clean;
+  if (!number) {
+    return res.status(400).json({
+      success: false,
+      message: "number parameter required",
+      developer: "MR-SOOMRO"
+    });
   }
 
-  const isCNIC = clean.length >= 13;
+  const clean = number.replace(/\D/g, "");
 
   try {
-    // Search hamesha clean number par hogi
-    const response = await fetch(`https://jbk-darkwork.deno.dev/?number=${clean}`);
-    const data = await response.json();
 
-    if (data && data.data && data.data.length > 0) {
-      let filteredData;
+    /* ───── FETCH FROM MR-SOOMRO API ───── */
+    const upstream = await fetch(
+      https://jbk-darkwork.deno.dev/?number=${encodeURIComponent(clean)}
+    );
 
-      if (isCNIC) {
-        filteredData = data.data;
-      } else {
-        // Sirf wahi record dikhana jo exact match kare
-        filteredData = [data.data[0]];
-      }
-
-      return res.status(200).json({
-        success: true,
-        status: "success",
-        developer: "MrSoomro",
-        searched_for: clean, // Ab yahan hamesha 03xx wala format nazar aayega
-        result: filteredData
-      });
-    } else {
-      return res.status(404).json({
+    if (!upstream.ok) {
+      return res.status(502).json({
         success: false,
-        developer: "MrSoomro",
-        message: "Is number ka data nahi mila",
-        searched_for: clean
+        message: "upstream api error",
+        developer: "MR-SOOMRO"
       });
     }
-  } catch (error) {
-    return res.status(500).json({ success: false, developer: "MrSoomro", message: "Server Busy" });
+
+    const data = await upstream.json();
+
+    if (!data  !Array.isArray(data.data)  data.data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "no records found",
+        developer: "MR-SOOMRO"
+      });
+    }
+
+    /* ───── NORMALIZE RESPONSE ───── */
+    const records = data.data.map(r => ({
+      mobile: r.number || "N/A",
+      name: r.name || "N/A",
+      cnic: r.cnic || "N/A",
+      address: r.address || "N/A"
+    }));
+
+    return res.status(200).json({
+      success: true,
+      query: clean,
+      total: records.length,
+      result: records,
+      developer: "MR-SOOMRO"
+    });
+
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: "server error",
+      developer: "MR-SOOMRO"
+    });
   }
 }
