@@ -1,37 +1,45 @@
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   const { query } = req.query;
-  if (!query) return res.status(400).json({ success: false, message: "Enter Number" });
 
-  const clean = query.replace(/\D/g, "");
-
-  // List of different data sources
-  const sources = [
-    `https://jbk-darkwork.deno.dev/?number=${clean}`,
-    `https://fam-official.serv00.net/api/database.php?number=${clean}`
-  ];
-
-  for (let url of sources) {
-    try {
-      const response = await fetch(url);
-      const data = await response.json();
-
-      // Agar kisi bhi source se data mil jaye
-      if ((data.success || data.status === "success") && (data.data || data.result)) {
-        return res.status(200).json({
-          success: true,
-          developer: "MrSoomro",
-          source: url.includes("darkwork") ? "Node 1" : "Node 2",
-          result: data.data || data.result || data
-        });
-      }
-    } catch (e) { continue; }
+  if (!query) {
+    return res.status(400).json({ success: false, message: "Enter Number or CNIC" });
   }
 
-  // Agar kahin se bhi na mile
-  return res.status(404).json({
-    success: false,
-    developer: "MrSoomro",
-    message: "Record not found in any database node"
-  });
+  const clean = query.replace(/\D/g, "");
+  // Agar query 11 digits se zyada hai toh hum samjhenge ye CNIC hai
+  const isCNIC = clean.length >= 13;
+
+  try {
+    const response = await fetch(`https://jbk-darkwork.deno.dev/?number=${clean}`);
+    const data = await response.json();
+
+    if (data && data.data && data.data.length > 0) {
+      let finalResult;
+
+      if (isCNIC) {
+        // CNIC search par saara data (All records) dikhayega
+        finalResult = data.data;
+      } else {
+        // Number search par sirf pehla (Single) record dikhayega
+        finalResult = [data.data[0]];
+      }
+
+      return res.status(200).json({
+        success: true,
+        status: "success",
+        developer: "MrSoomro", // Aapka branding fix kar diya
+        query_type: isCNIC ? "CNIC" : "NUMBER",
+        result: finalResult
+      });
+    } else {
+      return res.status(404).json({
+        success: false,
+        developer: "MrSoomro",
+        message: "No record found"
+      });
+    }
+  } catch (error) {
+    return res.status(500).json({ success: false, developer: "MrSoomro", message: "Server Error" });
+  }
 }
