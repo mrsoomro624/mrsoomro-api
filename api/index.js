@@ -1,101 +1,72 @@
 export default async function handler(req, res) {
-
-  /* ───── CORS ───── */
+  // CORS Headers
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "*");
-
+  
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
 
-  // Hum 'query' parameter use karenge taake flexibility rahe
   const { query } = req.query;
 
-  /* ───── VALIDATION ───── */
   if (!query) {
-    return res.status(400).json({
-      success: false,
-      message: "query parameter required (Number or CNIC)",
-      developer: "MrSoomro"
+    return res.status(400).json({ 
+      success: false, 
+      message: "Please provide Number or CNIC",
+      developer: "MrSoomro" 
     });
   }
 
+  // Number se extra characters hatane ke liye
   const clean = query.replace(/\D/g, "");
 
-  if (clean.length < 7) {
-    return res.status(400).json({
-      success: false,
-      message: "invalid input length",
-      developer: "MrSoomro"
-    });
-  }
-
   try {
-    const isCNIC = clean.length >= 13;
-    const searchParam = isCNIC ? "cnic" : "number";
+    // Timeout set karna zaroori hai taake Vercel freeze na ho
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), 8000); // 8 seconds timeout
 
-    /* ───── FETCH FROM SOURCE ───── */
-    const upstream = await fetch(
-      `https://jbk-darkwork.deno.dev/?number=?${searchParam}=${encodeURIComponent(clean)}`,
-      {
-        headers: {
-          "User-Agent": "MrSoomro-Cyber-Engine/2026",
-          "Accept": "application/json"
-        }
+    const upstream = await fetch(`https://jbk-darkwork.deno.dev/?number=${clean}`, {
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
       }
-    );
-
-    if (!upstream.ok) {
-      return res.status(502).json({
-        success: false,
-        message: "upstream api error",
-        developer: "MrSoomro"
-      });
-    }
+    });
+    
+    clearTimeout(id);
 
     const data = await upstream.json();
 
-    // Data check: Hum data.data.records check kar rahe hain
-    if (!data || data.success !== true || !data.data || !Array.isArray(data.data.records)) {
+    // Data check logic
+    if (data && data.success === true && Array.isArray(data.data) && data.data.length > 0) {
+      
+      const results = data.data.map(r => ({
+        full_name: r.name || "N/A",
+        phone: r.number || clean,
+        cnic: r.cnic || "N/A",
+        address: r.address || "N/A"
+      }));
+
+      return res.status(200).json({
+        success: true,
+        status: "success",
+        developer: "MrSoomro",
+        query: clean,
+        count: results.length,
+        result: results
+      });
+    } else {
       return res.status(404).json({
         success: false,
-        message: "no records found on MrSoomro nodes",
+        status: "error",
+        message: "No record found for this query",
         developer: "MrSoomro"
       });
     }
-
-    let records = data.data.records;
-
-    /* ───── SMART FILTER ───── */
-    // Agar number search hai (not CNIC), toh sirf pehla record dikhao
-    if (!isCNIC && records.length > 0) {
-        records = [records[0]]; 
-    }
-
-    /* ───── NORMALIZE DATA ───── */
-    const finalResults = records.map(r => ({
-      full_name: r.full_name || "N/A",
-      phone: r.phone || "N/A",
-      cnic: r.cnic || "N/A",
-      address: r.address || "N/A"
-    }));
-
-    /* ───── FINAL JSON RESPONSE ───── */
-    return res.status(200).json({
-      success: true,
-      status: "success",
-      query_type: isCNIC ? "CNIC" : "NUMBER",
-      count: finalResults.length,
-      result: finalResults,
-      developer: "MrSoomro",
-      admin: "+447455680379"
-    });
-
   } catch (err) {
-    return res.status(500).json({
+    return res.status(500).json({ 
       success: false,
-      message: "server error",
+      status: "error", 
+      message: "Database Node Busy or Offline",
       developer: "MrSoomro"
     });
   }
