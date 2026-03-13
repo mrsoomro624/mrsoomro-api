@@ -1,39 +1,37 @@
 export default async function handler(req, res) {
-  // CORS Headers taake har jagah chale
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
-
   const { query } = req.query;
+  if (!query) return res.status(400).json({ success: false, message: "Enter Number" });
 
-  if (!query) {
-    return res.status(400).json({ 
-      success: false, 
-      message: "Please enter a Number",
-      developer: "MrSoomro" 
-    });
+  const clean = query.replace(/\D/g, "");
+
+  // List of different data sources
+  const sources = [
+    `https://jbk-darkwork.deno.dev/?number=${clean}`,
+    `https://fam-official.serv00.net/api/database.php?number=${clean}`
+  ];
+
+  for (let url of sources) {
+    try {
+      const response = await fetch(url);
+      const data = await response.json();
+
+      // Agar kisi bhi source se data mil jaye
+      if ((data.success || data.status === "success") && (data.data || data.result)) {
+        return res.status(200).json({
+          success: true,
+          developer: "MrSoomro",
+          source: url.includes("darkwork") ? "Node 1" : "Node 2",
+          result: data.data || data.result || data
+        });
+      }
+    } catch (e) { continue; }
   }
 
-  // Number se extra characters hatana
-  const cleanNumber = query.replace(/\D/g, "");
-
-  try {
-    // Aapki di hui working API
-    const response = await fetch(`https://jbk-darkwork.deno.dev/?number=${cleanNumber}`);
-    const data = await response.json();
-
-    // Direct data display karna
-    return res.status(200).json({
-      success: true,
-      status: "success",
-      developer: "MrSoomro",
-      result: data // Ye direct aapki API ka result dikhayega
-    });
-
-  } catch (error) {
-    return res.status(500).json({ 
-      success: false, 
-      message: "Database Server Connection Error",
-      developer: "MrSoomro"
-    });
-  }
+  // Agar kahin se bhi na mile
+  return res.status(404).json({
+    success: false,
+    developer: "MrSoomro",
+    message: "Record not found in any database node"
+  });
 }
