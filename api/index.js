@@ -1,72 +1,45 @@
-export default async function handler(req, res) {
+const axios = require('axios');
+const cheerio = require('cheerio');
+const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-  /* ───── CORS (Frontend Friendly) ───── */
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "*");
-
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
-
-  const { number } = req.query;
-
-  if (!number) {
-    return res.status(400).json({
-      success: false,
-      message: "number parameter required",
-      developer: "MR-SOOMRO"
-    });
-  }
-
-  const clean = number.replace(/\D/g, "");
-
-  try {
-
-    /* ───── FETCH FROM MR-SOOMRO API ───── */
-    const upstream = await fetch(
-      https://jbk-darkwork.deno.dev/?number=${encodeURIComponent(clean)}
-    );
-
-    if (!upstream.ok) {
-      return res.status(502).json({
-        success: false,
-        message: "upstream api error",
-        developer: "MR-SOOMRO"
-      });
+app.get('/api/mrsoomro', async (req, res) => {
+    const number = req.query.number;
+    if (!number) {
+        return res.json({ error: "Please provide a number. Example: ?number=03001234567" });
     }
 
-    const data = await upstream.json();
+    try {
+        // Hum target website ko request bhej rahe hain
+        const targetUrl = `https://javeriasimdatabase.com/search.php?num=${number}`;
+        
+        const response = await axios.get(targetUrl, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+        });
 
-    if (!data  !Array.isArray(data.data)  data.data.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "no records found",
-        developer: "MR-SOOMRO"
-      });
+        // HTML ko parse (read) karna
+        const $ = cheerio.load(response.data);
+        
+        // Yahan hum table ya div se data nikalte hain (Is part ko target site ke mutabiq adjust karna hota hai)
+        let results = [];
+        $('table tr').each((i, el) => {
+            const row = $(el).text().trim();
+            if(row) results.push(row);
+        });
+
+        res.json({
+            status: "success",
+            developer: "MR SOOMRO",
+            number: number,
+            data: results.length > 0 ? results : "No record found or website changed layout"
+        });
+
+    } catch (error) {
+        res.status(500).json({ error: "Server error or Target site down", details: error.message });
     }
+});
 
-    /* ───── NORMALIZE RESPONSE ───── */
-    const records = data.data.map(r => ({
-      mobile: r.number || "N/A",
-      name: r.name || "N/A",
-      cnic: r.cnic || "N/A",
-      address: r.address || "N/A"
-    }));
-
-    return res.status(200).json({
-      success: true,
-      query: clean,
-      total: records.length,
-      result: records,
-      developer: "MR-SOOMRO"
-    });
-
-  } catch (err) {
-    return res.status(500).json({
-      success: false,
-      message: "server error",
-      developer: "MR-SOOMRO"
-    });
-  }
-}
+app.listen(PORT, () => console.log(`API running on port ${PORT}`));
