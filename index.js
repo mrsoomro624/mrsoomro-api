@@ -1,90 +1,74 @@
 <?php
-header('Content-Type: application/json');
+// OFFICIAL MRSOOMRO PRIVATE API
+header('Content-Type: json');
+header('Access-Control-Allow-Origin: *');
 
-/* MRSOOMRO PREMIUM DATABASE API 
-   Owner: Hadaiat Ullah
-   WhatsApp: +447455680379
-*/
-
-$number = isset($_GET['number']) ? $_GET['number'] : '';
-
-if(empty($number)) {
-    echo json_encode(["status" => "error", "message" => "Please enter number"]);
+$number = $_GET['number'] ?? '';
+if (empty($number)) {
+    echo json_encode(["status" => "error", "name" => "MRSOOMRO", "message" => "Number dalo!"]);
     exit;
 }
 
-// Mobile number format fix (03xx...)
-$number = ltrim($number, '0');
-$number = "0" . $number;
+$num = ltrim($number, '0');
 
-// Teeno sources ko check karne ka function
-function fetch_data($url, $number) {
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $url);
-    curl_setopt($ch, CURLOPT_POST, 1);
-    
-    // In sites ke liye common post fields
-    $post_fields = "number=" . urlencode($number) . "&search=submit&btnsearch=Search";
-    curl_setopt($ch, CURLOPT_POSTFIELDS, $post_fields);
-    
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 20);
-
-    // Ye headers Cloudflare ko dhoka dene ke liye hain
-    $headers = [
-        "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-        "Content-Type: application/x-www-form-urlencoded",
-        "User-Agent: Mozilla/5.0 (Linux; Android 10; SM-G960F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
-        "Origin: " . parse_url($url, PHP_URL_SCHEME) . "://" . parse_url($url, PHP_URL_HOST),
-        "Referer: " . $url
-    ];
-    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-
-    $res = curl_exec($ch);
-    curl_close($ch);
-    return $res;
-}
-
-$sources = [
-    "https://javeriasimdatabase.com/search.php",
-    "https://3dsimdatabase.com/search.php",
-    "https://freshsimsdatabases.com/search.php"
+// --- SECRET TARGETS ---
+$targets = [
+    "https://freshsimsdatabases.com/fetch.php?num=" . $num,
+    "https://3dsimdatabase.com/api.php?number=" . $num,
+    "https://freelivetraker.com/search.php"
 ];
 
+$final_data = null;
 $found = false;
-$result_text = "";
 
-foreach ($sources as $site) {
-    $html = fetch_data($site, $number);
+foreach ($targets as $url) {
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
     
-    // Check if result contains typical data markers
-    if (stripos($html, 'NAME') !== false || stripos($html, 'CNIC') !== false || stripos($html, 'ADDRESS') !== false) {
-        // Strip tags but keep it readable
-        $result_text = strip_tags($html);
+    // POST Request agar search.php ho
+    if (strpos($url, 'search.php') !== false) {
+        curl_setopt($ch, CURLOPT_POST, 1);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, "number=$num");
+    }
+
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0');
+    
+    $raw_response = curl_exec($ch);
+    curl_close($ch);
+
+    if ($raw_response && !strpos($raw_response, "No Record") && strlen($raw_response) > 30) {
+        // --- 100% BRANDING FILTER ---
+        // Sab dusre names ki list yahan hai
+        $other_names = [
+            "FreshSims", "3DSim", "JBK", "Darkwork", "Night-Howler", 
+            "LiveTracker", "Database", "Shehzad", "Hadaiat Ullah"
+        ];
+        
+        // Un sab ko mita kar sirf MRSOOMRO likho
+        $clean_step1 = str_ireplace($other_names, "MRSOOMRO", $raw_response);
+        $final_data = strip_tags($clean_step1);
+        
         $found = true;
         break; 
     }
 }
 
+// FINAL OUTPUT: SIRF MRSOOMRO
 if ($found) {
-    // Faltu ki spaces aur lines saaf karna
-    $clean_data = preg_replace('/\s+/', ' ', trim($result_text));
-    
     echo json_encode([
         "status" => "success",
-        "api_name" => "MRSOOMRO TOOLS",
-        "developer" => "Hadaiat Ullah",
-        "whatsapp" => "+447455680379",
-        "data" => $clean_data
+        "name" => "MRSOOMRO",
+        "whatsapp" => "923072570480",
+        "result" => trim($final_data)
     ], JSON_PRETTY_PRINT);
 } else {
     echo json_encode([
-        "status" => "error",
-        "message" => "Database response empty. Target sites might be blocking your hosting IP.",
-        "tip" => "Use a Paid Hosting or Premium Proxy",
-        "developer" => "MRSOOMRO"
+        "status" => "failed",
+        "name" => "MRSOOMRO",
+        "message" => "No record found in MRSOOMRO server."
     ], JSON_PRETTY_PRINT);
 }
 ?>
